@@ -1,5 +1,7 @@
 # SideWrite
 
+<img width="1366" height="768" alt="image" src="https://github.com/user-attachments/assets/eff19b0f-b12e-43f7-815e-669dd9a8d3b9" />
+
 A Firefox add-on for highlighting text on any webpage and keeping notes right beside it, stored locally on my own machine — no account, no server.
 
 I made it because I wanted to take notes easily on my laptop while reading: select a sentence, pick a color, write the thought in the sidebar, and move on. It has also become the way I enjoy my personal Bible study — highlighting verses, jotting down what they mean to me, and collecting the better statements I want to remember and return to later.
