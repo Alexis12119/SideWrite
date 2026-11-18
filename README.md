@@ -1,6 +1,6 @@
 # SideWrite
 
-<img width="1366" height="768" alt="image" src="https://github.com/user-attachments/assets/eff19b0f-b12e-43f7-815e-669dd9a8d3b9" />
+<img width="1366" height="768" alt="image" src="https://github.com/user-attachments/assets/e589a88b-1862-4c9b-adb4-73602351d947" />
 
 A Firefox add-on for highlighting text on any webpage and keeping notes right beside it, stored locally on my own machine — no account, no server.
 
