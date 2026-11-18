@@ -1,62 +1,119 @@
-const KEY = "annotations";
-async function readAll() {
-  const data = await browser.storage.local.get(KEY);
-  return Array.isArray(data[KEY]) ? data[KEY] : [];
+const SW = globalThis.SideWriteShared;
+const KEY = SW.ANNOTATIONS_KEY;
+
+const readAll = () => SW.readList(KEY);
+
+async function broadcastToUrl(url, message) {
+  if (!url) return;
+  try {
+    const tabs = await browser.tabs.query({});
+    for (const tab of tabs) {
+      if (tab.id && tab.url === url)
+        browser.tabs.sendMessage(tab.id, message).catch(() => {});
+    }
+  } catch (_) {}
 }
+
+async function sidebarOpenFor(sender) {
+  const windowId = sender?.tab?.windowId ?? null;
+  const details = windowId != null ? { windowId } : {};
+  let open = false;
+  try {
+    open = await browser.sidebarAction.isOpen(details);
+  } catch (_) {}
+  if (!open) {
+    // Firefox only allows this from a native user-action handler, so this usually fails from a page click.
+    try {
+      await browser.sidebarAction.open();
+      open = true;
+    } catch (_) {}
+    if (!open) {
+      try {
+        open = await browser.sidebarAction.isOpen(details);
+      } catch (_) {}
+    }
+  }
+  return { open, windowId };
+}
+
+async function handleEditInSidebar(message, sender) {
+  const { open, windowId } = await sidebarOpenFor(sender);
+  try {
+    await browser.storage.session.set({
+      pendingEdit: { id: message.id, windowId, at: Date.now() },
+    });
+  } catch (_) {}
+  return { ok: true, sidebarOpen: open };
+}
+
+async function saveAnnotation(annotation) {
+  const items = await readAll();
+  const i = items.findIndex((x) => x.id === annotation.id);
+  if (i >= 0) items[i] = annotation;
+  else items.unshift(annotation);
+  await browser.storage.local.set({ [KEY]: items });
+}
+
+async function updateAnnotation(id, patch) {
+  const items = await readAll();
+  const i = items.findIndex((x) => x.id === id);
+  if (i < 0) return false;
+  const prev = items[i];
+  items[i] = { ...prev, ...patch, updatedAt: new Date().toISOString() };
+  await browser.storage.local.set({ [KEY]: items });
+  if (patch?.color)
+    await broadcastToUrl(prev.url, {
+      type: "UPDATE_MARK",
+      id,
+      color: patch.color,
+    });
+  return true;
+}
+
+async function deleteAnnotation(id) {
+  const items = await readAll();
+  const item = items.find((x) => x.id === id);
+  await browser.storage.local.set({ [KEY]: items.filter((x) => x.id !== id) });
+  if (item) await broadcastToUrl(item.url, { type: "REMOVE_MARK", id });
+  return true;
+}
+
+async function createNotebook(notebook) {
+  if (!notebook?.id) return false;
+  const notebooks = await SW.readList(SW.NOTEBOOKS_KEY);
+  notebooks.push(notebook);
+  await browser.storage.local.set({ [SW.NOTEBOOKS_KEY]: notebooks });
+  return true;
+}
+
+async function saveAll(annotations, notebooks) {
+  if (!Array.isArray(annotations) || !Array.isArray(notebooks)) return false;
+  await browser.storage.local.set({
+    [KEY]: annotations,
+    [SW.NOTEBOOKS_KEY]: notebooks,
+  });
+  return true;
+}
+
 browser.runtime.onMessage.addListener(async (message, sender) => {
   if (!message?.type) return;
   if (message.type === "GET_ANNOTATIONS")
     return { annotations: await readAll() };
-  if (message.type === "EDIT_IN_SIDEBAR") {
-    const windowId = sender?.tab?.windowId ?? null;
-    const details = windowId != null ? { windowId } : {};
-    let sidebarOpen = false;
-    try {
-      sidebarOpen = await browser.sidebarAction.isOpen(details);
-    } catch (_) {}
-    if (!sidebarOpen) {
-      // Firefox only allows this from a native user-action handler, so this usually fails from a page click.
-      try {
-        await browser.sidebarAction.open();
-        sidebarOpen = true;
-      } catch (_) {}
-      if (!sidebarOpen) {
-        try {
-          sidebarOpen = await browser.sidebarAction.isOpen(details);
-        } catch (_) {}
-      }
-    }
-    try {
-      await browser.storage.session.set({
-        pendingEdit: { id: message.id, windowId, at: Date.now() },
-      });
-    } catch (_) {}
-    return { ok: true, sidebarOpen };
-  }
+  if (message.type === "EDIT_IN_SIDEBAR")
+    return handleEditInSidebar(message, sender);
   if (message.type === "SAVE_ANNOTATION") {
-    const items = await readAll();
-    const i = items.findIndex((x) => x.id === message.annotation.id);
-    if (i >= 0) items[i] = message.annotation;
-    else items.unshift(message.annotation);
-    await browser.storage.local.set({ [KEY]: items });
+    await saveAnnotation(message.annotation);
     return { ok: true };
   }
-  if (message.type === "UPDATE_ANNOTATION") {
-    const items = await readAll();
-    const i = items.findIndex((x) => x.id === message.id);
-    if (i < 0) return { ok: false };
-    items[i] = {
-      ...items[i],
-      ...message.patch,
-      updatedAt: new Date().toISOString(),
-    };
-    await browser.storage.local.set({ [KEY]: items });
-    return { ok: true };
-  }
+  if (message.type === "UPDATE_ANNOTATION")
+    return { ok: await updateAnnotation(message.id, message.patch) };
   if (message.type === "DELETE_ANNOTATION") {
-    const items = (await readAll()).filter((x) => x.id !== message.id);
-    await browser.storage.local.set({ [KEY]: items });
+    await deleteAnnotation(message.id);
     return { ok: true };
   }
+  if (message.type === "CREATE_NOTEBOOK")
+    return { ok: await createNotebook(message.notebook) };
+  if (message.type === "SAVE_ALL")
+    return { ok: await saveAll(message.annotations, message.notebooks) };
 });
 browser.action.onClicked.addListener(() => browser.sidebarAction.toggle());

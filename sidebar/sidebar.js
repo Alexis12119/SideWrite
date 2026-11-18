@@ -1,12 +1,7 @@
-const KEY = "annotations",
-  NOTEBOOKS_KEY = "notebooks";
-const COLORS = {
-  yellow: "#ffe58a",
-  green: "#b8edc4",
-  blue: "#b9dcff",
-  pink: "#ffc7df",
-  purple: "#ddc8ff",
-};
+const SW = globalThis.SideWriteShared;
+const KEY = SW.ANNOTATIONS_KEY,
+  NOTEBOOKS_KEY = SW.NOTEBOOKS_KEY;
+const COLORS = SW.COLORS;
 let annotations = [],
   notebooks = [],
   currentView = "page",
@@ -15,19 +10,10 @@ let annotations = [],
   selectedColor = "yellow",
   selectedNotebook = null,
   queuedEdit = null,
-  pendingBusy = false,
-  pendingAgain = false,
   colorTouched = false;
 const PENDING_TTL = 120000;
 const $ = (id) => document.getElementById(id);
-const esc = (v) =>
-  String(v ?? "").replace(
-    /[&<>"']/g,
-    (c) =>
-      ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[
-        c
-      ],
-  );
+const esc = SW.esc;
 const shortDate = (v) => {
   try {
     return new Intl.DateTimeFormat(undefined, {
@@ -41,12 +27,12 @@ const shortDate = (v) => {
 
 async function load() {
   const data = await browser.storage.local.get([KEY, NOTEBOOKS_KEY]);
-  annotations = Array.isArray(data[KEY]) ? data[KEY] : [];
-  notebooks = Array.isArray(data[NOTEBOOKS_KEY]) ? data[NOTEBOOKS_KEY] : [];
+  annotations = SW.asArray(data[KEY]);
+  notebooks = SW.asArray(data[NOTEBOOKS_KEY]);
   await getTab();
   render();
   syncEditorColor();
-  await processPendingEdit();
+  await consumePendingEdit();
   retryQueuedEdit();
 }
 async function getTab() {
@@ -76,6 +62,11 @@ function visibleItems() {
     );
   return items;
 }
+function notebookLabel(a) {
+  if (!a.notebookId) return "Unfiled";
+  const nb = notebooks.find((n) => n.id === a.notebookId);
+  return nb ? `▤ ${esc(nb.name)}` : "In notebook";
+}
 function render() {
   $("page-info").hidden = currentView !== "page";
   $("notebook-tools").hidden = currentView !== "notebooks";
@@ -89,10 +80,10 @@ function render() {
   $("annotations").innerHTML = items
     .map(
       (a) => `<article class="annotation" data-id="${esc(a.id)}">
-    <p class="quote"><span class="dot" style="background:${COLORS[a.color] || COLORS.yellow}"></span>${esc(a.selectedText)}</p>
+    <p class="quote"><span class="dot" style="background:${SW.colorOf(a.color)}"></span>${esc(a.selectedText)}</p>
     ${a.note ? `<p class="note">${esc(a.note)}</p>` : `<p class="note">No note yet — edit to add one.</p>`}
     <div class="meta"><span>${esc(a.title || "Saved webpage")}</span><span>${shortDate(a.createdAt)}</span></div>
-    <div class="meta card-actions"><span>${a.notebookId ? "▤ In notebook" : "Unfiled"}</span><span><button data-edit="${esc(a.id)}">Edit</button><button data-delete="${esc(a.id)}">Delete</button></span></div>
+    <div class="meta card-actions"><span>${notebookLabel(a)}</span><span><button data-edit="${esc(a.id)}">Edit</button><button data-delete="${esc(a.id)}">Delete</button></span></div>
   </article>`,
     )
     .join("");
@@ -163,36 +154,20 @@ async function consumePendingEdit() {
   } catch {}
   showEditorFor(entry.id, Date.now());
 }
-async function processPendingEdit() {
-  if (pendingBusy) {
-    pendingAgain = true;
-    return;
-  }
-  pendingBusy = true;
-  try {
-    while (true) {
-      pendingAgain = false;
-      await consumePendingEdit();
-      if (!pendingAgain) break;
-    }
-  } finally {
-    pendingBusy = false;
-  }
-}
 function applyColorUI(color) {
-  selectedColor = color || "yellow";
+  selectedColor = SW.normalizeColor(color);
   document
     .querySelectorAll("#editor-colors button")
     .forEach((x) =>
       x.classList.toggle("selected", x.dataset.color === selectedColor),
     );
   const q = $("editor-quote");
-  if (q) q.style.background = COLORS[selectedColor] || COLORS.yellow;
+  if (q) q.style.background = SW.colorOf(selectedColor);
 }
 function syncEditorColor() {
   if (!editingId || colorTouched) return;
   const item = annotations.find((a) => a.id === editingId);
-  if (item && (item.color || "yellow") !== selectedColor)
+  if (item && SW.normalizeColor(item.color) !== selectedColor)
     applyColorUI(item.color);
 }
 function openEditor(id) {
@@ -219,40 +194,36 @@ function closeEditor() {
 async function save() {
   const item = annotations.find((a) => a.id === editingId);
   if (!item) return;
-  item.note = $("note-input").value;
-  item.color = selectedColor;
-  item.notebookId = $("notebook-select").value || null;
-  item.updatedAt = new Date().toISOString();
-  await browser.storage.local.set({ [KEY]: annotations });
-  if (currentTab?.id && item.url === currentTab.url)
-    browser.tabs
-      .sendMessage(currentTab.id, {
-        type: "UPDATE_MARK",
-        id: item.id,
-        color: item.color,
-      })
-      .catch(() => {});
+  const patch = {
+    note: $("note-input").value,
+    color: selectedColor,
+    notebookId: $("notebook-select").value || null,
+  };
+  const res = await browser.runtime.sendMessage({
+    type: "UPDATE_ANNOTATION",
+    id: editingId,
+    patch,
+  });
+  if (!res?.ok) {
+    alert(
+      "SideWrite couldn't save that note. Check that the extension is enabled.",
+    );
+    return;
+  }
+  Object.assign(item, patch);
   closeEditor();
   render();
 }
 async function deleteById(id) {
   const item = annotations.find((a) => a.id === id);
   if (!item) return;
-  if (
-    !confirm(
-      "Delete this highlight and its attached note? This cannot be undone.",
-    )
-  )
-    return;
+  if (!confirm(SW.CONFIRM_DELETE)) return;
+  const res = await browser.runtime.sendMessage({
+    type: "DELETE_ANNOTATION",
+    id,
+  });
+  if (!res?.ok) return;
   annotations = annotations.filter((a) => a.id !== id);
-  await browser.storage.local.set({ [KEY]: annotations });
-  const tabs = await browser.tabs.query({});
-  for (const tab of tabs) {
-    if (tab.url === item.url && tab.id)
-      browser.tabs
-        .sendMessage(tab.id, { type: "REMOVE_MARK", id })
-        .catch(() => {});
-  }
   if (editingId === id) closeEditor();
   render();
 }
@@ -286,6 +257,12 @@ $("save-note").addEventListener("click", save);
 $("delete-note").addEventListener("click", () => {
   if (editingId) deleteById(editingId);
 });
+$("editor-colors").innerHTML = Object.entries(COLORS)
+  .map(
+    ([c, v]) =>
+      `<button data-color="${c}" title="${c}" style="--swatch:${v}"></button>`,
+  )
+  .join("");
 $("editor-colors").addEventListener("click", (e) => {
   const b = e.target.closest("[data-color]");
   if (!b) return;
@@ -302,13 +279,17 @@ $("new-notebook").addEventListener("click", async () => {
   const name = prompt("Name this notebook:");
   if (!name?.trim()) return;
   const n = {
-    id: "nb-" + Date.now().toString(36),
+    id: SW.makeId("nb"),
     name: name.trim(),
     createdAt: new Date().toISOString(),
   };
+  const res = await browser.runtime.sendMessage({
+    type: "CREATE_NOTEBOOK",
+    notebook: n,
+  });
+  if (!res?.ok) return;
   notebooks.push(n);
   selectedNotebook = n.id;
-  await browser.storage.local.set({ [NOTEBOOKS_KEY]: notebooks });
   render();
 });
 $("export").addEventListener("click", () => {
@@ -337,12 +318,14 @@ $("import-file").addEventListener("change", async (e) => {
       )
     )
       return;
+    const res = await browser.runtime.sendMessage({
+      type: "SAVE_ALL",
+      annotations: data.annotations,
+      notebooks: data.notebooks,
+    });
+    if (!res?.ok) throw Error("Import failed");
     annotations = data.annotations;
     notebooks = data.notebooks;
-    await browser.storage.local.set({
-      [KEY]: annotations,
-      [NOTEBOOKS_KEY]: notebooks,
-    });
     await load();
     alert("Backup imported successfully.");
   } catch (err) {
@@ -356,7 +339,7 @@ $("import-file").addEventListener("change", async (e) => {
 });
 browser.storage.onChanged.addListener((changes, area) => {
   if (area === "local" && (changes[KEY] || changes[NOTEBOOKS_KEY])) load();
-  if (area === "session" && changes.pendingEdit) processPendingEdit();
+  if (area === "session" && changes.pendingEdit) consumePendingEdit();
 });
 browser.tabs.onActivated.addListener(load);
 browser.tabs.onUpdated.addListener((id, change) => {

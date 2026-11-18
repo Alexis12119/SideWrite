@@ -2,28 +2,24 @@
   if (window.__sideWriteV03) return;
   window.__sideWriteV03 = true;
 
-  const COLORS = {
-    yellow: "#ffe58a",
-    green: "#b8edc4",
-    blue: "#b9dcff",
-    pink: "#ffc7df",
-    purple: "#ddc8ff",
-  };
-  const $ = (id) => document.getElementById(id);
+  const SW = globalThis.SideWriteShared;
+  const COLORS = SW.COLORS;
+  const BLOCK_SELECTOR = SW.BLOCK_SELECTOR;
   let selectionData = null;
   let toolbar = null;
   let activeMarkMenu = null;
 
-  const clean = (s) => (s || "").replace(/\s+/g, " ").trim();
-  const makeId = () =>
-    "pp-" +
-    Date.now().toString(36) +
-    "-" +
-    Math.random().toString(36).slice(2, 8);
   const escAttr = (s) => CSS.escape(String(s));
+  const getMark = (id) =>
+    document.querySelector(`[data-sidewrite-id="${escAttr(id)}"]`);
+  const applyMarkColor = (mark, color) => {
+    if (!mark) return;
+    mark.style.backgroundColor = SW.colorOf(color);
+    mark.dataset.swColor = SW.normalizeColor(color);
+  };
 
   function installUI() {
-    if ($("sidewrite-style")) return;
+    if (document.getElementById("sidewrite-style")) return;
     const style = document.createElement("style");
     style.id = "sidewrite-style";
     style.textContent = `
@@ -33,8 +29,14 @@
       #sidewrite-toolbar .pp-label{font-weight:700;margin-right:2px}
       #sidewrite-toolbar button{border:1px solid #ffffff88;border-radius:50%;width:23px;height:23px;background:var(--swatch);cursor:pointer;padding:0}
       #sidewrite-toolbar button.pp-note{width:auto;height:27px;border-radius:7px;padding:0 10px;background:#3b5578;color:white;border-color:#64748b;font-weight:650}
+      #sidewrite-toolbar button.pp-close{width:auto;height:auto;border:0;border-radius:0;background:transparent;color:#c7cedb;font:700 15px/1 system-ui,sans-serif;padding:0 1px}
+      #sidewrite-toolbar button.pp-close:hover{color:#fff}
       #sidewrite-mark-menu{display:none;flex-direction:column;gap:8px;padding:8px;background:#20242b;border:1px solid #454b55;border-radius:10px;box-shadow:0 8px 28px #0005}
-      #sidewrite-mark-menu .pp-actions{display:flex;gap:6px}
+      #sidewrite-mark-menu .pp-head{display:flex;align-items:baseline;justify-content:space-between}
+      #sidewrite-mark-menu .pp-head span{font:700 9px system-ui,sans-serif;color:#9aa4b2;letter-spacing:.06em;text-transform:uppercase}
+      #sidewrite-mark-menu .pp-head button{width:auto;height:auto;border:0;border-radius:0;background:transparent;color:#9aa4b2;cursor:pointer;font:700 14px/1 system-ui,sans-serif;padding:0 1px}
+      #sidewrite-mark-menu .pp-head button:hover{color:#fff}
+      #sidewrite-mark-menu .pp-actions{display:flex;gap:6px;justify-content:space-between}
       #sidewrite-mark-menu .pp-actions button{border:1px solid #d5dae3;border-radius:7px;padding:7px 11px;background:#fff;color:#20242b;cursor:pointer;font:600 12px system-ui,sans-serif}
       #sidewrite-mark-menu .pp-actions button.danger{background:#fff1f1;color:#a32626;border-color:#f0caca}
       #sidewrite-mark-menu .pp-swatches{display:flex;align-items:center;gap:8px}
@@ -55,36 +57,42 @@
             `<button data-color="${c}" title="${c}" style="--swatch:${v}"></button>`,
         )
         .join("")}
-      <button class="pp-note" data-color="yellow">＋ Note</button>`;
+      <button class="pp-note" data-color="yellow">＋ Note</button>
+      <button class="pp-close" data-close title="Close">×</button>`;
     document.documentElement.appendChild(toolbar);
 
     activeMarkMenu = document.createElement("div");
     activeMarkMenu.id = "sidewrite-mark-menu";
-    activeMarkMenu.innerHTML = `<div class="pp-swatches"><span>Color</span>${Object.entries(
-      COLORS,
-    )
-      .map(
-        ([c, v]) =>
-          `<button data-color="${c}" title="${c}" style="--swatch:${v}"></button>`,
-      )
-      .join("")}</div>
+    activeMarkMenu.innerHTML = `<div class="pp-head"><span>Highlight</span><button data-action="close" title="Close">×</button></div>
+      <div class="pp-swatches"><span>Color</span>${Object.entries(COLORS)
+        .map(
+          ([c, v]) =>
+            `<button data-color="${c}" title="${c}" style="--swatch:${v}"></button>`,
+        )
+        .join("")}</div>
       <div class="pp-actions"><button data-action="edit">Edit note</button><button data-action="delete" class="danger">Delete highlight</button></div>`;
     document.documentElement.appendChild(activeMarkMenu);
 
     toolbar.addEventListener("mousedown", (e) => e.preventDefault());
     toolbar.addEventListener("click", (e) => {
+      if (e.target.closest("[data-close]")) {
+        hideToolbar();
+        return;
+      }
       const b = e.target.closest("[data-color]");
       if (!b || !selectionData) return;
       createHighlight(b.dataset.color);
     });
     activeMarkMenu.addEventListener("click", (e) => {
+      if (e.target.closest('[data-action="close"]')) {
+        hideMarkMenu();
+        return;
+      }
       if (!activeMarkMenu.dataset.id) return;
       const sw = e.target.closest("[data-color]");
       if (sw) {
         const id = activeMarkMenu.dataset.id;
-        const mark = document.querySelector(
-          `[data-sidewrite-id="${escAttr(id)}"]`,
-        );
+        const mark = getMark(id);
         hideMarkMenu();
         changeColor(id, sw.dataset.color, mark);
         return;
@@ -92,11 +100,9 @@
       const b = e.target.closest("[data-action]");
       if (!b) return;
       const id = activeMarkMenu.dataset.id;
-      const mark = document.querySelector(
-        `[data-sidewrite-id="${escAttr(id)}"]`,
-      );
+      const mark = getMark(id);
       hideMarkMenu();
-      if (b.dataset.action === "edit") editAnnotation(id);
+      if (b.dataset.action === "edit") focusSidebarEditor(id);
       if (b.dataset.action === "delete") deleteAnnotation(id, mark);
     });
   }
@@ -112,8 +118,7 @@
       range.commonAncestorContainer.nodeType === 1
         ? range.commonAncestorContainer
         : range.commonAncestorContainer.parentElement;
-    const block =
-      parent?.closest("p,li,blockquote,td,th,div,section,article") || parent;
+    const block = parent?.closest(BLOCK_SELECTOR) || parent;
     const text = block?.textContent || "";
     const at = text.indexOf(selected);
     return {
@@ -128,8 +133,8 @@
     const mark = document.createElement("mark");
     mark.className = "sidewrite-mark";
     mark.dataset.sidewriteId = id;
-    mark.dataset.swColor = color;
-    mark.style.backgroundColor = COLORS[color] || COLORS.yellow;
+    mark.dataset.swColor = SW.normalizeColor(color);
+    mark.style.backgroundColor = SW.colorOf(color);
     mark.title = "SideWrite highlight — click for options";
     try {
       const fragment = range.extractContents();
@@ -142,7 +147,7 @@
   }
   function showToast(text) {
     installUI();
-    let toast = $("sidewrite-toast");
+    let toast = document.getElementById("sidewrite-toast");
     if (!toast) {
       toast = document.createElement("div");
       toast.id = "sidewrite-toast";
@@ -161,25 +166,14 @@
         type: "EDIT_IN_SIDEBAR",
         id,
       });
-      if (!res?.sidebarOpen)
-        showToast(
-          "SideWrite sidebar is closed — open it from the toolbar to edit this note.",
-        );
+      if (!res?.sidebarOpen) showToast(SW.SIDEBAR_CLOSED_MSG);
     } catch (_) {
-      showToast(
-        "SideWrite sidebar is closed — open it from the toolbar to edit this note.",
-      );
+      showToast(SW.SIDEBAR_CLOSED_MSG);
     }
-  }
-  function editAnnotation(id) {
-    focusSidebarEditor(id);
   }
   async function changeColor(id, color, mark) {
     const prev = mark?.dataset.swColor || "yellow";
-    if (mark) {
-      mark.style.backgroundColor = COLORS[color] || COLORS.yellow;
-      mark.dataset.swColor = color;
-    }
+    applyMarkColor(mark, color);
     try {
       const res = await browser.runtime.sendMessage({
         type: "UPDATE_ANNOTATION",
@@ -188,22 +182,14 @@
       });
       if (!res?.ok) throw new Error("update failed");
     } catch (_) {
-      if (mark) {
-        mark.style.backgroundColor = COLORS[prev] || COLORS.yellow;
-        mark.dataset.swColor = prev;
-      }
+      applyMarkColor(mark, prev);
       showToast(
         "SideWrite couldn't change that color. Check that the extension is enabled.",
       );
     }
   }
   async function deleteAnnotation(id, mark) {
-    if (
-      !confirm(
-        "Delete this highlight and its attached note? This cannot be undone.",
-      )
-    )
-      return;
+    if (!confirm(SW.CONFIRM_DELETE)) return;
     await browser.runtime.sendMessage({ type: "DELETE_ANNOTATION", id });
     if (mark) unwrapMark(mark);
   }
@@ -220,7 +206,7 @@
     const saved = selectionData;
     selectionData = null;
     hideToolbar();
-    const id = makeId(),
+    const id = SW.makeId(),
       ctx = contextFor(saved.range, saved.text);
     const item = {
       id,
@@ -258,8 +244,7 @@
 
   // Restore text anchors across inline elements within a paragraph/block, preferring matching context.
   function findAnchor(item) {
-    const selectors = "p,li,blockquote,td,th,div,section,article";
-    const candidates = [...document.querySelectorAll(selectors)].filter(
+    const candidates = [...document.querySelectorAll(BLOCK_SELECTOR)].filter(
       (el) =>
         !el.closest(
           "script,style,noscript,textarea,input,select,button,[contenteditable=true],.sidewrite-mark",
@@ -326,8 +311,7 @@
   }
   function restore(item) {
     if (!item || item.url !== location.href || !item.selectedText) return;
-    if (document.querySelector(`[data-sidewrite-id="${escAttr(item.id)}"]`))
-      return;
+    if (getMark(item.id)) return;
     const range = findAnchor(item);
     if (range) wrapRange(range, item.color, item.id);
   }
@@ -344,7 +328,8 @@
     setTimeout(() => {
       installUI();
       const sel = window.getSelection(),
-        text = clean(sel?.toString());
+        raw = sel?.toString() || "",
+        text = raw.replace(/\s+/g, " ").trim();
       if (!text || !sel?.rangeCount) {
         hideToolbar();
         return;
@@ -359,12 +344,12 @@
       selectionData = {
         range: range.cloneRange(),
         text,
-        selectionText: sel.toString(),
+        selectionText: raw,
       };
       const rect = range.getBoundingClientRect();
       toolbar.style.display = "flex";
       toolbar.style.left =
-        Math.max(8, Math.min(rect.left, innerWidth - 300)) + "px";
+        Math.max(8, Math.min(rect.left, innerWidth - 340)) + "px";
       toolbar.style.top = Math.max(8, rect.top - 48) + "px";
     }, 20);
   });
@@ -387,7 +372,7 @@
       installUI();
       const rect = mark.getBoundingClientRect();
       activeMarkMenu.dataset.id = mark.dataset.sidewriteId;
-      const current = mark.dataset.swColor || "yellow";
+      const current = SW.normalizeColor(mark.dataset.swColor);
       activeMarkMenu
         .querySelectorAll(".pp-swatches button")
         .forEach((b) =>
@@ -395,7 +380,7 @@
         );
       activeMarkMenu.style.display = "flex";
       activeMarkMenu.style.left =
-        Math.max(8, Math.min(rect.left, innerWidth - 270)) + "px";
+        Math.max(8, Math.min(rect.left, innerWidth - 300)) + "px";
       activeMarkMenu.style.top =
         Math.max(8, Math.min(innerHeight - 92, rect.bottom + 6)) + "px";
     },
@@ -405,18 +390,10 @@
   browser.runtime.onMessage.addListener((message) => {
     if (!message) return;
     if (message.type === "UPDATE_MARK") {
-      const mark = document.querySelector(
-        `[data-sidewrite-id="${escAttr(message.id)}"]`,
-      );
-      if (mark) {
-        mark.style.backgroundColor = COLORS[message.color] || COLORS.yellow;
-        mark.dataset.swColor = message.color;
-      }
+      applyMarkColor(getMark(message.id), message.color);
     }
     if (message.type === "REMOVE_MARK") {
-      const mark = document.querySelector(
-        `[data-sidewrite-id="${escAttr(message.id)}"]`,
-      );
+      const mark = getMark(message.id);
       if (mark) unwrapMark(mark);
     }
   });
