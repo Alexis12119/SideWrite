@@ -8,8 +8,13 @@
   let selectionData = null;
   let toolbar = null;
   let activeMarkMenu = null;
+  let pageItems = [];
 
   const escAttr = (s) => CSS.escape(String(s));
+  // Same page regardless of fragment: links to a chapter often lack #study=…
+  // (or use a different one) while the stored URL has it — reload/back match
+  // exactly, click-through doesn't.
+  const pageKey = (u) => String(u).split("#")[0];
   const getMark = (id) =>
     document.querySelector(`[data-sidewrite-id="${escAttr(id)}"]`);
   const applyMarkColor = (mark, color) => {
@@ -310,18 +315,28 @@
     return range;
   }
   function restore(item) {
-    if (!item || item.url !== location.href || !item.selectedText) return;
+    if (!item || !item.selectedText) return;
+    if (pageKey(item.url) !== pageKey(location.href)) return;
     if (getMark(item.id)) return;
     const range = findAnchor(item);
     if (range) wrapRange(range, item.color, item.id);
+    else
+      console.debug(
+        "[SideWrite] could not re-anchor highlight",
+        item.id,
+        JSON.stringify(item.selectedText),
+      );
   }
   async function restoreAll() {
     try {
       const r = await browser.runtime.sendMessage({ type: "GET_ANNOTATIONS" });
-      (r?.annotations || [])
-        .filter((a) => a.url === location.href)
-        .forEach(restore);
+      pageItems = r?.annotations || [];
     } catch (_) {}
+    applyMissing();
+  }
+  function applyMissing() {
+    const key = pageKey(location.href);
+    pageItems.filter((a) => pageKey(a.url) === key).forEach(restore);
   }
 
   document.addEventListener("mouseup", () => {
@@ -400,4 +415,31 @@
 
   installUI();
   restoreAll();
+
+  // Keep the cached annotation list fresh from any source (sidebar edits, imports).
+  browser.storage.onChanged.addListener((changes, area) => {
+    if (area === "local" && changes[SW.ANNOTATIONS_KEY]) restoreAll();
+  });
+  // Re-apply when the page's own rendering destroys marks, or the URL changes
+  // without a reload (history API / hash settling after load). restore() skips
+  // highlights already present, and the debounce lets wrapping settle first.
+  let verifyTimer = 0;
+  const scheduleApply = () => {
+    clearTimeout(verifyTimer);
+    verifyTimer = setTimeout(applyMissing, 250);
+  };
+  new MutationObserver(scheduleApply).observe(document.documentElement, {
+    childList: true,
+    subtree: true,
+  });
+  window.addEventListener("popstate", scheduleApply);
+  window.addEventListener("hashchange", scheduleApply);
+  for (const method of ["pushState", "replaceState"]) {
+    const original = history[method];
+    history[method] = function (...args) {
+      const result = original.apply(this, args);
+      scheduleApply();
+      return result;
+    };
+  }
 })();
