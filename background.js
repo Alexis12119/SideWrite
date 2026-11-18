@@ -100,6 +100,33 @@ async function createNotebook(notebook) {
   return true;
 }
 
+async function renameNotebook(id, name) {
+  if (typeof name !== "string" || !name.trim()) return false;
+  const notebooks = await SW.readList(SW.NOTEBOOKS_KEY);
+  const i = notebooks.findIndex((n) => n.id === id);
+  if (i < 0) return false;
+  notebooks[i] = { ...notebooks[i], name: name.trim() };
+  await browser.storage.local.set({ [SW.NOTEBOOKS_KEY]: notebooks });
+  return true;
+}
+
+async function deleteNotebook(id) {
+  const notebooks = (await SW.readList(SW.NOTEBOOKS_KEY)).filter(
+    (n) => n.id !== id,
+  );
+  const annotations = await readAll();
+  let unfiled = false;
+  for (const a of annotations) {
+    if (a.notebookId === id) {
+      a.notebookId = null;
+      unfiled = true;
+    }
+  }
+  const changes = { [SW.NOTEBOOKS_KEY]: notebooks };
+  if (unfiled) changes[KEY] = annotations;
+  await browser.storage.local.set(changes);
+}
+
 async function saveAll(annotations, notebooks) {
   if (!Array.isArray(annotations) || !Array.isArray(notebooks)) return false;
   await browser.storage.local.set({
@@ -127,6 +154,12 @@ browser.runtime.onMessage.addListener(async (message, sender) => {
   }
   if (message.type === "CREATE_NOTEBOOK")
     return { ok: await createNotebook(message.notebook) };
+  if (message.type === "RENAME_NOTEBOOK")
+    return { ok: await renameNotebook(message.id, message.name) };
+  if (message.type === "DELETE_NOTEBOOK") {
+    await deleteNotebook(message.id);
+    return { ok: true };
+  }
   if (message.type === "SAVE_ALL")
     return { ok: await saveAll(message.annotations, message.notebooks) };
 });

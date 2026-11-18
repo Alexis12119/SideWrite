@@ -100,7 +100,7 @@ function renderNotebooks() {
     notebooks
       .map(
         (n) =>
-          `<div class="notebook ${selectedNotebook === n.id ? "active" : ""}" data-notebook="${esc(n.id)}"><span>▤ ${esc(n.name)}</span><span>${annotations.filter((a) => a.notebookId === n.id).length}</span></div>`,
+          `<div class="notebook ${selectedNotebook === n.id ? "active" : ""}" data-notebook="${esc(n.id)}"><span>▤ ${esc(n.name)}</span><span class="nb-tools"><span>${annotations.filter((a) => a.notebookId === n.id).length}</span><button data-nb-rename="${esc(n.id)}" title="Rename notebook">✎</button><button data-nb-delete="${esc(n.id)}" title="Delete notebook">✕</button></span></div>`,
       )
       .join("") ||
     `<p class="note">No notebooks yet. Create one to group your notes.</p>`;
@@ -109,6 +109,10 @@ function renderNotebooks() {
     notebooks
       .map((n) => `<option value="${esc(n.id)}">${esc(n.name)}</option>`)
       .join("");
+  // Rebuilding the options resets the select; keep the open editor's choice.
+  if (editingId)
+    $("notebook-select").value =
+      annotations.find((a) => a.id === editingId)?.notebookId || "";
 }
 function showEditorFor(id, at) {
   if (!annotations.some((a) => a.id === id)) {
@@ -269,7 +273,45 @@ $("editor-colors").addEventListener("click", (e) => {
   colorTouched = true;
   applyColorUI(b.dataset.color);
 });
-$("notebook-list").addEventListener("click", (e) => {
+$("notebook-list").addEventListener("click", async (e) => {
+  const rename = e.target.closest("[data-nb-rename]");
+  if (rename) {
+    const id = rename.dataset.nbRename;
+    const nb = notebooks.find((x) => x.id === id);
+    if (!nb) return;
+    const name = prompt("Rename notebook:", nb.name);
+    if (!name?.trim() || name.trim() === nb.name) return;
+    const res = await browser.runtime.sendMessage({
+      type: "RENAME_NOTEBOOK",
+      id,
+      name: name.trim(),
+    });
+    if (!res?.ok) return;
+    nb.name = name.trim();
+    render();
+    return;
+  }
+  const del = e.target.closest("[data-nb-delete]");
+  if (del) {
+    const id = del.dataset.nbDelete;
+    const nb = notebooks.find((x) => x.id === id);
+    if (!nb) return;
+    const count = annotations.filter((a) => a.notebookId === id).length;
+    const detail = count
+      ? ` Its ${count} highlight${count === 1 ? "" : "s"} will be unfiled, not deleted.`
+      : "";
+    if (!confirm(`Delete notebook "${nb.name}"?${detail}`)) return;
+    const res = await browser.runtime.sendMessage({
+      type: "DELETE_NOTEBOOK",
+      id,
+    });
+    if (!res?.ok) return;
+    notebooks = notebooks.filter((x) => x.id !== id);
+    for (const a of annotations) if (a.notebookId === id) a.notebookId = null;
+    if (selectedNotebook === id) selectedNotebook = null;
+    render();
+    return;
+  }
   const n = e.target.closest("[data-notebook]");
   if (!n) return;
   selectedNotebook = n.dataset.notebook;

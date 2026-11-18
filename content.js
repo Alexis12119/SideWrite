@@ -14,7 +14,10 @@
   // Same page regardless of fragment: links to a chapter often lack #study=…
   // (or use a different one) while the stored URL has it — reload/back match
   // exactly, click-through doesn't.
-  const pageKey = (u) => String(u).split("#")[0];
+  const pageKey = (u) => {
+    const uu = new URL(u, location.href);
+    return uu.origin + uu.pathname;
+  };
   const getMark = (id) =>
     document.querySelector(`[data-sidewrite-id="${escAttr(id)}"]`);
   const applyMarkColor = (mark, color) => {
