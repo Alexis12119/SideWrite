@@ -1,3 +1,6 @@
+// Chrome loads background.js alone as a service worker, so pull in shared.js there;
+// Firefox lists both files under background.scripts already.
+if (typeof importScripts === "function") importScripts("shared.js");
 const SW = globalThis.SideWriteShared;
 const KEY = SW.ANNOTATIONS_KEY;
 
@@ -16,6 +19,17 @@ async function broadcastToUrl(url, message) {
 
 async function sidebarOpenFor(sender) {
   const windowId = sender?.tab?.windowId ?? null;
+  // Chrome: only sidePanel exists. open() needs a user gesture, which a page
+  // click usually can't provide — failing is fine, pendingEdit still gets set.
+  if (browser.sidePanel) {
+    try {
+      const id = windowId ?? (await browser.windows.getCurrent())?.id;
+      await browser.sidePanel.open({ windowId: id });
+      return { open: true, windowId };
+    } catch (_) {
+      return { open: false, windowId };
+    }
+  }
   const details = windowId != null ? { windowId } : {};
   let open = false;
   try {
@@ -116,4 +130,12 @@ browser.runtime.onMessage.addListener(async (message, sender) => {
   if (message.type === "SAVE_ALL")
     return { ok: await saveAll(message.annotations, message.notebooks) };
 });
-browser.action.onClicked.addListener(() => browser.sidebarAction.toggle());
+// Firefox: toggle the sidebar. Chrome: no sidebarAction, so the toolbar click
+// is handled by setPanelBehavior below instead.
+if (browser.sidePanel?.setPanelBehavior) {
+  browser.sidePanel
+    .setPanelBehavior({ openPanelOnActionClick: true })
+    .catch(() => {});
+}
+if (browser.sidebarAction)
+  browser.action.onClicked.addListener(() => browser.sidebarAction.toggle());

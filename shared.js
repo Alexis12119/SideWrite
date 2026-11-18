@@ -1,4 +1,6 @@
 // Constants and helpers shared by the background, content, and sidebar scripts.
+// Chrome exposes only chrome.* (promise-based since Chrome 99); Firefox exposes browser.*.
+if (!globalThis.browser) globalThis.browser = globalThis.chrome;
 (() => {
   const COLORS = Object.freeze({
     yellow: "#ffe58a",

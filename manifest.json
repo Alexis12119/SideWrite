@@ -1,6 +1,6 @@
 {
   "manifest_version": 3,
-  "name": "SideWrite \u2014 Highlights & Notes",
+  "name": "SideWrite — Highlights & Notes",
   "version": "0.3.0",
   "description": "Highlight webpage text, attach notes, and organize annotations locally.",
   "permissions": ["storage", "activeTab", "tabs"],
@@ -10,7 +10,18 @@
   },
   "action": {
     "default_title": "Open SideWrite sidebar",
-    "default_icon": "icons/icon.svg"
+    "default_icon": {
+      "16": "icons/icon-16.png",
+      "32": "icons/icon-32.png",
+      "48": "icons/icon-48.png",
+      "128": "icons/icon-128.png"
+    }
+  },
+  "icons": {
+    "16": "icons/icon-16.png",
+    "32": "icons/icon-32.png",
+    "48": "icons/icon-48.png",
+    "128": "icons/icon-128.png"
   },
   "sidebar_action": {
     "default_title": "SideWrite",

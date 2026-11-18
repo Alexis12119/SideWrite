@@ -26,6 +26,21 @@ I made it because I wanted to take notes easily on my laptop while reading: sele
 5. Click **Load Temporary Add-on…** and choose this folder's `manifest.json`.
 6. Open the sidebar from Firefox's Sidebar button/menu and choose **SideWrite**.
 
+## Install in Chrome
+
+Chrome rejects Firefox's background manifest key, so Chrome gets its own build:
+
+1. Run `node build.js` in this folder (no dependencies; regenerates `dist/chrome`).
+2. Open `chrome://extensions`.
+3. Enable **Developer mode** (toggle in the top right).
+4. Click **Load unpacked** and select the **`dist/chrome`** folder (not the repo root — Chrome can't load `manifest.json` directly).
+5. If an old **PagePens** extension is listed, remove it — its content script interferes and its alerts still say "PagePens".
+6. Click the SideWrite toolbar button — the side panel opens on the right. If you don't see its icon, open Chrome's puzzle-piece menu and pin SideWrite.
+
+Re-run `node build.js` after changing any file, then press ↻ on the extension card in `chrome://extensions`.
+
+The unpacked extension stays loaded across Chrome restarts until you remove it. Highlighting, notes, notebooks, search, and export/import work the same as in Firefox. One Chrome quirk: Chrome only lets the toolbar button open the side panel, so choosing **Edit note** or **＋ Note** while the panel is closed shows a hint to open it — the editor opens automatically once you do.
+
 ## Open the sidebar again
 
 - The sidebar opens automatically when the extension is installed or loaded.
