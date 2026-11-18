@@ -1,0 +1,19 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>SideWrite</title><link rel="stylesheet" href="sidebar.css"></head>
+<body>
+<header><div class="brand"><div class="logo">S</div><div><h1>SideWrite</h1><p>Highlights & notes</p></div></div><button id="refresh" class="icon-btn" title="Refresh">↻</button></header>
+<main>
+  <div class="tabs"><button class="tab active" data-view="page">This page</button><button class="tab" data-view="all">All notes</button><button class="tab" data-view="notebooks">Notebooks</button></div>
+  <div class="search-wrap"><input id="search" type="search" placeholder="Search highlights and notes…"></div>
+  <section id="page-info" class="page-info"></section>
+  <section id="notebook-tools" class="notebook-tools" hidden><div class="row"><strong>Notebooks</strong><button id="new-notebook" class="small-btn">＋ New</button></div><div id="notebook-list"></div></section>
+  <section id="editor" class="editor" hidden><div class="row"><strong>Edit note</strong><button id="close-editor" class="icon-btn">×</button></div>
+    <p id="editor-quote" class="quote"></p><label for="note-input">Your note</label><textarea id="note-input" rows="4" placeholder="Write your thought…"></textarea>
+    <label>Highlight color</label><div id="editor-colors" class="colors"><button data-color="yellow"></button><button data-color="green"></button><button data-color="blue"></button><button data-color="pink"></button><button data-color="purple"></button></div>
+    <label for="notebook-select">Notebook</label><select id="notebook-select"><option value="">Unfiled</option></select>
+    <div class="row actions"><button id="save-note" class="primary">Save changes</button><button id="delete-note" class="danger">Delete</button></div>
+  </section>
+  <section id="annotations" class="annotations"></section>
+  <div id="empty" class="empty" hidden><div class="empty-icon">✎</div><strong>No highlights yet</strong><p>Select text on a webpage and choose a color to save your first highlight.</p></div>
+</main>
+<footer><span>Saved on this device</span><button id="export" class="text-btn">Export backup</button><button id="import" class="text-btn">Import</button><input id="import-file" type="file" accept="application/json" hidden></footer>
+<script src="sidebar.js"></script></body></html>

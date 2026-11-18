@@ -1,0 +1,46 @@
+{
+  "manifest_version": 3,
+  "name": "SideWrite \u2014 Highlights & Notes",
+  "version": "0.3.0",
+  "description": "Highlight webpage text, attach notes, and organize annotations locally.",
+  "permissions": [
+    "storage",
+    "activeTab",
+    "tabs"
+  ],
+  "host_permissions": [
+    "<all_urls>"
+  ],
+  "background": {
+    "scripts": [
+      "background.js"
+    ]
+  },
+  "action": {
+    "default_title": "Open SideWrite sidebar",
+    "default_icon": "icons/icon.svg"
+  },
+  "sidebar_action": {
+    "default_title": "SideWrite",
+    "default_panel": "sidebar/sidebar.html",
+    "default_icon": "icons/icon.svg",
+    "open_at_install": true
+  },
+  "content_scripts": [
+    {
+      "matches": [
+        "<all_urls>"
+      ],
+      "js": [
+        "content.js"
+      ],
+      "run_at": "document_idle"
+    }
+  ],
+  "browser_specific_settings": {
+    "gecko": {
+      "id": "sidewrite@example.local",
+      "strict_min_version": "115.0"
+    }
+  }
+}

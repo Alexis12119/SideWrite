@@ -1,2 +1,42 @@
 # SideWrite
-Firefox add-on: highlight text, write notes in the sidebar, study in peace — everything stored on your device.
+
+A Firefox add-on for highlighting text on any webpage and keeping notes right beside it, stored locally on my own machine — no account, no server.
+
+I made it because I wanted to take notes easily on my laptop while reading: select a sentence, pick a color, write the thought in the sidebar, and move on. It has also become the way I enjoy my personal Bible study — highlighting verses, jotting down what they mean to me, and collecting the better statements I want to remember and return to later.
+
+## What it does
+- Select text on a page and choose a color — the highlight is saved instantly.
+- The sidebar opens with the note field focused, so writing starts right away.
+- Click a highlight for a small menu: **Color** swatches to recolor it in place (no sidebar needed), **Edit note**, and **Delete highlight**.
+- Edit notes in the sidebar, where the quoted text sits on the highlight's own color and turns black so it always stays readable.
+- Organize with **This page** / **All notes** / **Notebooks**, plus search.
+- Highlights are restored when you revisit a page using the text and its surrounding context.
+- Everything is saved on the device; **Export backup** / **Import** live in the fixed footer.
+
+## Install / update
+1. If you're coming from the older PagePens build, export a backup from it first — the extension id changed to `sidewrite@example.local`, so old highlights don't carry over.
+2. Extract this ZIP to a permanent folder.
+3. Open `about:debugging#/runtime/this-firefox`.
+4. If an old SideWrite temporary add-on is loaded, click **Remove**. This removes the temporary extension registration; it may also remove that version's local storage, so export first.
+5. Click **Load Temporary Add-on…** and choose this folder's `manifest.json`.
+6. Open the sidebar from Firefox's Sidebar button/menu and choose **SideWrite**.
+
+## Open the sidebar again
+- The sidebar opens automatically when the extension is installed or loaded.
+- Click Firefox's Sidebar button in the toolbar and choose **SideWrite**.
+- If it is not visible: Firefox menu → More tools → Customize toolbar… → drag the Sidebar control onto the toolbar.
+- You can also use View → Sidebar → SideWrite (menu wording varies by Firefox version).
+- The SideWrite extension toolbar button toggles the sidebar.
+
+## Use it
+1. Select text on a normal webpage.
+2. Choose a highlight color (or **＋ Note**). The highlight is saved and the sidebar editor opens with the note field focused — write the note and choose **Save changes**. If the sidebar is closed, a hint appears in the page; open the sidebar within about 2 minutes and the editor opens there.
+3. Click a saved highlight to open its menu: use the **Color** swatches to recolor it immediately, or choose **Edit note** (opens that note in the sidebar editor) / **Delete highlight**.
+4. Confirm deletion when asked.
+5. Use the sidebar to browse this page, all notes, or notebooks.
+
+## Storage and limitations
+- Data is stored on this device using `browser.storage.local`; there is no account or server.
+- Text restoration uses the selected text plus nearby context. Dynamic pages that rewrite their content, duplicated text, or pages that substantially change may still need manual attention.
+- Browser-internal pages, PDFs, and some protected pages do not allow content-script highlighting.
+- Temporary add-ons are removed by Firefox when it restarts; load the add-on again from `about:debugging`, or submit/sign it through Mozilla Add-ons for regular use.
